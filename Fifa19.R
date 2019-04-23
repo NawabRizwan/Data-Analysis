@@ -1,0 +1,98 @@
+(library(ggplot2))
+(library(tidyr))
+(library(dplyr))
+(library(readxl))
+(library(gridExtra))
+(library(plotly))
+
+raw.data <- read.csv("data/Fifa19C.csv",stringsAsFactors = F)
+
+#Selecting only the required columns from the complete dataframe
+data <- raw.data %>% select(ID,Name,Age,Nationality,Overall,Potential,Club,Value,Wage,Preferred.Foot,International.Reputation,Weak.Foot,Skill.Moves,Position,Jersey.Number,Height,Weight,Release.Clause)
+
+#Converting categorical values to factors
+data$International.Reputation <- as.factor(data$International.Reputation)
+data$Weak.Foot <- as.factor(data$Weak.Foot)
+data$Skill.Moves <- as.factor(data$Skill.Moves)
+data$Jersey.Number <- as.factor(data$Jersey.Number)
+head(data)
+
+toNumberCurrency <- function(vector) {
+    vector <- as.character(vector)
+    #replace '???' with 'Euro sign'
+    vector <- gsub("(€|,)","", vector) 
+    result <- as.numeric(vector)
+   
+    k_positions <- grep("K", vector)
+    result[k_positions] <- as.numeric(gsub("K","",vector[k_positions])) * 1000
+  
+    m_positions <- grep("M", vector)
+    result[m_positions] <- as.numeric(gsub("M","",vector[m_positions])) * 1000000
+    
+    return(result)
+}
+data$Wage <- toNumberCurrency(data$Wage) 
+data$Value <- toNumberCurrency(data$Value)
+data$Release.Clause <- toNumberCurrency(data$Release.Clause)
+head(data)
+
+#Converting height to entimeters
+l <- strsplit(data$Height,"'",fixed = T)
+data$Height <- sapply(l, function(x) sum(as.numeric(x)*c(30.4,2.54)))
+
+
+#Removing lbs from the weight column
+data$Weight <- gsub("[a-zA-Z ]", "", data$Weight)
+data$Weight <- as.numeric(data$Weight)
+
+#Replace specefic positions of players with more general positions
+data$Position <- if_else(data$Position=="ST" | data$Position=="RS" | data$Position=="LS","ST",data$Position)
+data$Position <- if_else(data$Position=="LF" | data$Position=="LW","LW",data$Position)
+data$Position <- if_else(data$Position=="RF" | data$Position=="RW","RW",data$Position)
+data$Position <- if_else(data$Position=="CM" | data$Position=="RCM" | data$Position=="LCM","CM",data$Position)
+data$Position <- if_else(data$Position=="CB" | data$Position=="RCB" | data$Position=="LCB","CB",data$Position)
+data$Position <- if_else(data$Position=="CDM" | data$Position=="LDM" | data$Position=="RDM","CDM",data$Position)
+data$Position <- if_else(data$Position=="CAM" | data$Position=="LAM" | data$Position=="RAM","CAM",data$Position)
+head(data)
+
+#Total players based on position
+pl <- ggplot(data,aes(x = Position)) + geom_bar() + theme_minimal() 
+ggplotly(pl)
+
+#Getting top players using order
+top.players <- data[order(data$Overall,decreasing = T),]
+top.25 <- head(top.players,25)
+
+#Jersey numbers for the top 25 players
+pl <- ggplot(top.25,aes(Jersey.Number)) + geom_bar() + theme_minimal() 
+ggplotly(pl)
+
+#Ages of top 25 players
+pl <- ggplot(top.25,aes(Age)) + geom_histogram(binwidth = 1) + theme_minimal() 
+ggplotly(pl)
+
+#Top 25 based on countries
+pl <- ggplot(top.25,aes(Nationality)) + geom_bar() + theme_minimal() + theme(axis.text.x = element_text(angle = 45,hjust = 1))
+ggplotly(pl)
+
+#Top 25 by position
+pl <- ggplot(top.25,aes(x = Position,fill = Name)) + geom_bar() + theme_minimal() 
+ggplotly(pl)
+
+#Getting the top potential players with age < 25 
+top.potential <- data %>% filter(Age<=25) %>% arrange(desc(Potential))
+head(top.potential)
+
+top.50.potential <- head(top.potential,50)
+
+#Clubs of top 50 potential players
+pl <- ggplot(top.50.potential,aes(x=Nationality)) + geom_bar(aes(fill=Name)) + theme_minimal() + theme(axis.text.x = element_text(angle = 45,hjust = 1))
+ggplotly(pl)
+temp <- top.50.potential[order(top.50.potential$Age,top.50.potential$Value,-top.50.potential$Potential,-top.50.potential$Overall),]
+head(temp)
+
+top.25.and.top.50.potential <- rbind(top.25,top.50.potential)
+
+#Top 50 players based on Club
+pl <- ggplot(top.50.potential,aes(x=Club)) + geom_bar() + theme_minimal() + theme(axis.text.x = element_text(angle = 45,hjust = 1))
+ggplotly(pl)
